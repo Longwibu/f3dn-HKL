@@ -1,0 +1,17 @@
+{
+  "name": "phishguard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bộ khung extension Chrome/Edge bảo vệ trước URL đáng ngờ",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "npm run build && playwright test",
+    "check": "npm test && npm run build"
+  },
+  "dependencies": { "punycode": "2.3.1", "tldts": "7.5.2" },
+  "devDependencies": { "@playwright/test": "1.65.0", "esbuild": "0.28.2" }
+}

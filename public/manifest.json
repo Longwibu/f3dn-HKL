@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "PhishGuard — Bảo vệ khi lướt web",
+  "version": "0.1.0",
+  "description": "Cảnh báo URL giả mạo Unicode, tên miền gần giống; chặn quảng cáo và tab quảng cáo cơ bản.",
+  "minimum_chrome_version": "120",
+  "permissions": ["storage", "tabs", "webNavigation", "declarativeNetRequest"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PhishGuard",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "options_page": "options.html",
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "content_security_policy": { "extension_pages": "script-src 'self'; object-src 'none'; base-uri 'none'" },
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "ads", "enabled": true, "path": "rules/ads.json" },
+      { "id": "trackers", "enabled": true, "path": "rules/trackers.json" }
+    ]
+  }
+}

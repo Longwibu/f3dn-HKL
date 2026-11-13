@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cài đặt • PhishGuard</title><link rel="stylesheet" href="styles.css"><script type="module" src="options.js"></script></head>
+<body>
+  <header class="page-header"><div class="brand"><img src="icons/48.png" width="34" height="34" alt="">PhishGuard</div><span class="version">Cài đặt · MVP 0.1</span></header>
+  <main class="page">
+    <div class="page-intro"><p class="eyebrow">Bạn chủ động, trình duyệt an tâm</p><h1>Thiết lập lớp bảo vệ của bạn.</h1><p>Chọn cách PhishGuard kiểm tra website và xử lý các dấu hiệu rủi ro. Thay đổi có hiệu lực ở lần truy cập tiếp theo.</p></div>
+    <form id="settings-form" class="card">
+      <h2>Bảo vệ khi duyệt web</h2>
+      <label class="setting"><span><strong>Bật PhishGuard</strong><small>Bật kiểm tra tự động, luật chặn và cảnh báo.</small></span><input class="switch" id="enabled" type="checkbox"></label>
+      <label class="setting"><span><strong>Hạn chế website rủi ro cao</strong><small>Chuyển sang trang cảnh báo khi điểm từ 60; chặn kết nối đến hostname trong danh sách chặn.</small></span><input class="switch" id="blockDangerous" type="checkbox"></label>
+      <label class="setting"><span><strong>Chặn quảng cáo cơ bản</strong><small>Chặn một số request bên thứ ba thuộc 3 nhóm hostname quảng cáo mẫu. Chưa hỗ trợ mọi quảng cáo hoặc quảng cáo video.</small></span><input class="switch" id="blockAds" type="checkbox"></label>
+      <label class="setting"><span><strong>Chặn trình theo dõi cơ bản</strong><small>Chặn một số request bên thứ ba thuộc 3 nhóm hostname theo dõi mẫu. Có thể ảnh hưởng một số tính năng của trang.</small></span><input class="switch" id="blockTrackers" type="checkbox"></label>
+      <label class="setting"><span><strong>Đóng tab quảng cáo đã biết</strong><small>Đóng tab/cửa sổ mới có đích trong danh sách quảng cáo hoặc tracker. Không phân biệt được mọi popup với thao tác mở tab chủ động.</small></span><input class="switch" id="blockPopups" type="checkbox"></label>
+      <label class="setting"><span><strong>Kiểm tra DNSSEC khi kiểm tra URL thủ công</strong><small>Tùy chọn: gửi hostname tới Google Public DNS. Không gửi đường dẫn hoặc nội dung trang. Chưa xác thực DNSSEC không đồng nghĩa với lừa đảo.</small></span><input class="switch" id="dnssec" type="checkbox"></label>
+      <div class="actions"><button type="submit" id="save-settings" class="button" disabled>Lưu cài đặt</button><p id="status" role="status" class="status" aria-live="polite"></p></div>
+    </form>
+    <form id="lists-form" class="card">
+      <h2>Danh sách do bạn quản lý</h2><p>Mỗi dòng một hostname, ví dụ <code>example.com</code>. Không nhập đường dẫn hoặc ký tự đại diện. Tối đa 200 dòng mỗi danh sách.</p>
+      <div class="two-columns">
+        <div><label class="field-label" for="blockedDomains">Tên miền cần chặn</label><textarea id="blockedDomains" placeholder="website-dang-ngo.test" spellcheck="false"></textarea><p class="hint">Áp dụng cho hostname và các tên miền con của nó.</p></div>
+        <div><label class="field-label" for="allowedDomains">Ngoại lệ cảnh báo truy cập</label><textarea id="allowedDomains" placeholder="hostname-ban-da-xac-minh.test" spellcheck="false"></textarea><p class="hint">Chỉ hostname chính xác. Vẫn hiển thị điểm rủi ro; không tắt luật chặn quảng cáo/tracker.</p></div>
+      </div>
+      <div class="actions"><button type="submit" id="save-lists" class="button secondary" disabled>Lưu danh sách</button><p id="list-status" role="status" class="status" aria-live="polite"></p></div>
+    </form>
+    <section class="card"><div class="section-heading"><h2>Hoạt động gần đây</h2><button class="button quiet" id="clear-history">Xóa lịch sử &amp; thống kê</button></div><p>Tối đa 50 sự kiện cục bộ. Chỉ giữ hostname, thời gian, mức điểm và mã lý do.</p><ul class="history-list" id="history"></ul><p class="hint" id="history-status" role="status"></p></section>
+    <section class="card"><h2>Dữ liệu &amp; giới hạn của bản base</h2><p>Phân tích URL chạy trên máy. Mặc định không gửi URL hoặc nội dung trang ra ngoài. DNSSEC chỉ gọi Google DNS khi bạn bật và kiểm tra URL thủ công.</p><p>Danh sách nguy hiểm đi kèm chỉ có hai miền thử nghiệm <code>phishguard-blocked.test</code> và <code>login-bank.test</code>. Chưa kết nối cơ sở dữ liệu lừa đảo thực tế. AI kiểm chứng tin và Facebook Page chưa được triển khai.</p><p>Điểm rủi ro là heuristic, có thể bỏ sót hoặc cảnh báo nhầm. Website chưa có dấu hiệu vẫn có thể nguy hiểm.</p></section>
+  </main>
+</body></html>

@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cảnh báo truy cập • PhishGuard</title><link rel="stylesheet" href="styles.css"><script type="module" src="warning.js"></script></head>
+<body>
+  <header class="page-header"><div class="brand"><img src="icons/48.png" width="32" height="32" alt="">PhishGuard</div><span class="tag">Cảnh báo truy cập</span></header>
+  <main class="warning-page">
+    <div class="warning-icon" aria-hidden="true">!</div>
+    <h1>Hãy kiểm tra trước khi tiếp tục.</h1>
+    <p class="lead">PhishGuard phát hiện dấu hiệu rủi ro trong địa chỉ website bạn đang mở. Tránh nhập mật khẩu, mã OTP hoặc thông tin thanh toán khi chưa xác minh.</p>
+    <p id="status" class="status" role="status" aria-live="polite">Đang tải thông tin cảnh báo…</p>
+    <article id="result" class="result" hidden>
+      <div class="result-heading"><strong id="level"></strong><span id="score"></span></div>
+      <div class="result-body"><p class="hostname" id="hostname" dir="ltr"></p><dl class="domain-details"><div><dt>Unicode</dt><dd id="unicode" dir="ltr"></dd></div><div><dt>Miền đăng ký</dt><dd id="domain" dir="ltr"></dd></div></dl><ul id="reasons" class="reasons"></ul></div>
+    </article>
+    <div class="actions"><button class="button" id="leave">Rời khỏi trang này</button><button class="button secondary" id="options">Mở cài đặt</button></div>
+    <p class="fine-print">Cảnh báo dựa trên URL, chưa xác minh nội dung website. Phân tích tên miền gần giống có thể cảnh báo nhầm.</p>
+    <details class="continue" id="continue-details" hidden><summary>Tôi đã xác minh và muốn tiếp tục</summary><p>Cho phép đúng hostname này trong tab hiện tại đến khi đóng tab. Đây là ngoại lệ truy cập, không phải xác nhận website an toàn.</p><button class="button danger" id="continue">Tiếp tục trong tab này</button></details>
+  </main>
+</body></html>

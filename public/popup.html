@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PhishGuard</title><link rel="stylesheet" href="styles.css"><script type="module" src="popup.js"></script></head>
+<body class="popup">
+  <header class="header">
+    <div class="brand"><img src="icons/48.png" width="30" height="30" alt="">PhishGuard</div>
+    <div class="header-actions"><span class="version">MVP 0.1</span><button class="icon-button" id="options" aria-label="Mở cài đặt" title="Cài đặt">⚙</button></div>
+  </header>
+  <main>
+    <section class="protection" id="protection" aria-label="Trạng thái bảo vệ">
+      <span class="state-dot" aria-hidden="true"></span>
+      <div class="protection-text"><strong id="protection-title">Đang tải bảo vệ…</strong><small id="protection-detail">Kiểm tra URL ngay trên trình duyệt</small></div>
+      <input type="checkbox" class="switch" id="enabled" aria-label="Bật bảo vệ PhishGuard" disabled>
+    </section>
+    <section class="stats" aria-label="Thống kê cục bộ">
+      <div class="stat"><strong id="scans">0</strong><small>Lượt kiểm tra tự động</small></div>
+      <div class="stat"><strong id="warnings">0</strong><small>Lượt có dấu hiệu</small></div>
+      <div class="stat"><strong id="popups">0</strong><small>Tab quảng cáo đã đóng</small></div>
+    </section>
+    <section>
+      <label class="eyebrow" for="url">Kiểm tra một đường link</label>
+      <form id="scan-form" class="scan-form"><input id="url" type="text" placeholder="Dán URL hoặc tên miền…" autocomplete="off" spellcheck="false" maxlength="8192" required><button class="button" id="scan" type="submit">Kiểm tra</button></form>
+    </section>
+    <p id="status" role="status" class="status" aria-live="polite"></p>
+    <section aria-live="polite">
+      <div class="section-heading"><span class="eyebrow" id="result-source">Website đang mở</span><button id="current" class="button quiet" hidden>Tab hiện tại</button></div>
+      <p class="empty" id="empty">Mở một website hoặc dán URL phía trên để kiểm tra.</p>
+      <article class="result" id="result" hidden>
+        <div class="result-heading"><strong id="level"></strong><span id="score" title="Điểm heuristic, không phải xác suất lừa đảo"></span></div>
+        <div class="result-body">
+          <p id="hostname" class="hostname" dir="ltr"></p>
+          <dl class="domain-details"><div><dt>Unicode</dt><dd id="unicode" dir="ltr"></dd></div><div><dt>Miền đăng ký</dt><dd id="domain" dir="ltr"></dd></div></dl>
+          <p id="exception" class="exception" hidden></p>
+          <details id="reason-details"><summary>Lý do &amp; lưu ý</summary><ul id="reasons" class="reasons"></ul><p class="dns" id="dns"></p></details>
+        </div>
+      </article>
+    </section>
+    <aside class="future"><div class="section-heading"><h3>AI kiểm chứng nội dung</h3><span class="tag">Giai đoạn sau</span></div><p>Tin giả &amp; Facebook Page giả mạo: chưa có mô hình AI được kết nối.</p><button id="ai-info">Xem trạng thái tích hợp</button><p id="ai-status" role="status"></p></aside>
+  </main>
+  <footer class="footer">Phân tích cục bộ · Điểm rủi ro không phải xác suất lừa đảo</footer>
+</body></html>
