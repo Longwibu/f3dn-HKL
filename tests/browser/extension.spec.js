@@ -66,7 +66,7 @@ test("popup phân tích Unicode, không mở URL; từ chối javascript", async
   await app.popup.locator("#scan").click();
   await expect(app.popup.locator("#status")).toContainText("Chỉ hỗ trợ URL");
   await app.popup.locator("#ai-info").click();
-  await expect(app.popup.locator("#ai-status")).toContainText("Chưa cấu hình backend AI");
+  await expect(app.popup.locator("#ai-status")).toContainText("Bộ lọc Facebook đang tắt");
   expect(errors).toEqual([]);
 });
 
@@ -157,4 +157,59 @@ test("cảnh báo giả/hết hạn không có nút vượt chặn", async ({ ap
   await page.goto(`${app.root}/warning.html?id=attacker-controlled`);
   await expect(page.locator("#status")).toContainText("hết hạn");
   await expect(page.locator("#continue-details")).toBeHidden();
+});
+
+test("popup tách yêu cầu, sửa/xóa danh sách và làm mờ bài Facebook", async ({ app }) => {
+  // Test-only upstream + Facebook DOM fixture; never sends a key or post to Google/Facebook.
+  await app.worker.evaluate(() => {
+    globalThis.fetch = async (url, options) => {
+      const input = JSON.parse(options.body);
+      if (String(url).includes(":generateContent")) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const editing = input.contents[0].parts[0].text.includes("quảng cáo rượu");
+        const rules = editing ? [{ label: "Quảng cáo rượu", description: "Quảng cáo bán rượu bia", exclusions: "" }]
+          : [{ label: "Cờ bạc mạng", description: "Quảng cáo cá độ và cờ bạc trực tuyến", exclusions: "Bài cảnh báo tác hại" },
+            { label: "Khiêu dâm", description: "Nội dung khiêu dâm", exclusions: "" }];
+        return Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: JSON.stringify({ rules }) }] } }] });
+      }
+      return Response.json({ answers: Object.fromEntries(Object.entries(input.questions).map(([id, question]) => [id, {
+        type: "noul", noul: question.criteria.true_description.includes("cá độ") && input.input.includes("cá độ") ? 0.95 : 0.05,
+        confidence: 0.95,
+      }])) });
+    };
+  });
+  await app.popup.locator("#facebook-key").fill("test-key-not-a-real-credential");
+  await app.popup.locator("#facebook-consent").check();
+  await app.popup.locator("#save-connection").click();
+  await expect(app.popup.locator("#connection-status")).toHaveText("Đã lưu kết nối trên máy.");
+  await app.popup.locator("#preferences-prompt").fill("Tôi không thích cờ bạc mạng và khiêu dâm, nhưng vẫn xem bài cảnh báo tác hại.");
+  await app.popup.locator("#compile-preferences").click();
+  await expect(app.popup.locator("#rules-count")).toHaveText("2 mục");
+  await expect(app.popup.locator("#facebook-enabled")).toBeChecked();
+
+  await app.context.route("https://www.facebook.com/**", (route) => route.fulfill({
+    contentType: "text/html; charset=utf-8", body: `<!doctype html><html><body><main role="main">
+    <article role="article" id="gambling" style="padding:40px;min-height:100px"><p data-ad-comet-preview="message">Tham gia cá độ trực tuyến, nhận thưởng mỗi ngày.</p></article>
+    <div data-pagelet="FeedUnit_2" id="ordinary"><p data-ad-rendering-role="story_message">Hôm nay cùng đi dạo công viên nhé.</p></div>
+    </main></body></html>`,
+  }));
+  const feed = await app.context.newPage();
+  await feed.goto("https://www.facebook.com/");
+  await expect(feed.locator("#gambling")).toHaveCSS("filter", "blur(10px)");
+  await expect(feed.locator("#ordinary")).toHaveCSS("filter", "none");
+  await expect(feed.getByText(/Bạn có muốn xem bài này/)).toBeVisible();
+  await feed.getByRole("button", { name: "Xem bài", exact: true }).click();
+  await expect(feed.locator("#gambling")).toHaveCSS("filter", "none");
+  await feed.getByRole("button", { name: "Làm mờ lại" }).click();
+  await expect(feed.locator("#gambling")).toHaveCSS("filter", "blur(10px)");
+
+  await app.popup.getByRole("button", { name: "Sửa Khiêu dâm", exact: true }).click();
+  await app.popup.locator("#preferences-prompt").fill("Tôi muốn làm mờ quảng cáo rượu.");
+  await app.popup.locator("#compile-preferences").click();
+  await expect(app.popup.getByRole("button", { name: "Sửa Quảng cáo rượu", exact: true })).toBeVisible();
+  await app.popup.getByRole("button", { name: "Xóa Cờ bạc mạng", exact: true }).click();
+  await expect(app.popup.locator("#rules-count")).toHaveText("1 mục");
+  await expect(feed.locator("#gambling")).toHaveCSS("filter", "none");
+  expect(await feed.locator("#gambling").getAttribute("inert")).toBeNull();
+  await app.popup.screenshot({ path: "test-results/popup-preferences.png", fullPage: true });
 });

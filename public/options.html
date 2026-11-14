@@ -14,6 +14,7 @@
       <label class="setting"><span><strong>Kiểm tra DNSSEC khi kiểm tra URL thủ công</strong><small>Tùy chọn: gửi hostname tới Google Public DNS. Không gửi đường dẫn hoặc nội dung trang. Chưa xác thực DNSSEC không đồng nghĩa với lừa đảo.</small></span><input class="switch" id="dnssec" type="checkbox"></label>
       <div class="actions"><button type="submit" id="save-settings" class="button" disabled>Lưu cài đặt</button><p id="status" role="status" class="status" aria-live="polite"></p></div>
     </form>
+    <section class="card"><h2>Lọc Facebook theo ý bạn</h2><p>Bấm biểu tượng PhishGuard trên thanh công cụ để nhập yêu cầu, quản lý danh sách lọc và kết nối Gemini ngay trong popup.</p></section>
     <form id="lists-form" class="card">
       <h2>Danh sách do bạn quản lý</h2><p>Mỗi dòng một hostname, ví dụ <code>example.com</code>. Không nhập đường dẫn hoặc ký tự đại diện. Tối đa 200 dòng mỗi danh sách.</p>
       <div class="two-columns">
@@ -23,6 +24,6 @@
       <div class="actions"><button type="submit" id="save-lists" class="button secondary" disabled>Lưu danh sách</button><p id="list-status" role="status" class="status" aria-live="polite"></p></div>
     </form>
     <section class="card"><div class="section-heading"><h2>Hoạt động gần đây</h2><button class="button quiet" id="clear-history">Xóa lịch sử &amp; thống kê</button></div><p>Tối đa 50 sự kiện cục bộ. Chỉ giữ hostname, thời gian, mức điểm và mã lý do.</p><ul class="history-list" id="history"></ul><p class="hint" id="history-status" role="status"></p></section>
-    <section class="card"><h2>Dữ liệu &amp; giới hạn của bản base</h2><p>Phân tích URL chạy trên máy. Mặc định không gửi URL hoặc nội dung trang ra ngoài. DNSSEC chỉ gọi Google DNS khi bạn bật và kiểm tra URL thủ công.</p><p>Danh sách nguy hiểm đi kèm chỉ có hai miền thử nghiệm <code>phishguard-blocked.test</code> và <code>login-bank.test</code>. Chưa kết nối cơ sở dữ liệu lừa đảo thực tế. AI kiểm chứng tin và Facebook Page chưa được triển khai.</p><p>Điểm rủi ro là heuristic, có thể bỏ sót hoặc cảnh báo nhầm. Website chưa có dấu hiệu vẫn có thể nguy hiểm.</p></section>
+    <section class="card"><h2>Dữ liệu &amp; giới hạn của bản thử nghiệm</h2><p>Phân tích URL chạy trên máy. Gemini nhận yêu cầu lọc và text bài khi bạn kết nối và đồng ý trong popup. Không lưu text bài vào lịch sử. DNSSEC chỉ gọi Google DNS khi bạn bật và kiểm tra URL thủ công.</p><p>Danh sách nguy hiểm đi kèm chỉ có hai miền thử nghiệm <code>phishguard-blocked.test</code> và <code>login-bank.test</code>. Chưa có threat feed, kiểm chứng tin giả hoặc xác minh Facebook Page.</p><p>Bộ lọc có thể bỏ sót hoặc cảnh báo nhầm. Nếu Facebook đổi giao diện, một số bài có thể không được nhận diện.</p></section>
   </main>
 </body></html>

@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS } from "../data/catalog.js";
+import { DEFAULT_FACEBOOK_SETTINGS } from "../core/facebook-policy.js";
 
 // Mọi phép ghi local được xếp hàng tại service worker để tránh mất cập nhật.
 let queue = Promise.resolve();
@@ -14,9 +15,12 @@ export function mutateLocal(update) {
 }
 
 export async function readLocal() {
-  const saved = await chrome.storage.local.get(["settings", "blockedDomains", "allowedDomains", "history", "stats"]);
+  const saved = await chrome.storage.local.get(["settings", "facebook", "blockedDomains", "allowedDomains", "history", "stats"]);
+  // Migrate the first prototype: preserve the personal key, discard demo mode.
+  const { mode: _oldMode, ...facebook } = saved.facebook ?? {};
   return {
     settings: { ...DEFAULT_SETTINGS, ...saved.settings },
+    facebook: { ...DEFAULT_FACEBOOK_SETTINGS, compileStatus: "idle", compileError: "", compileJob: null, ...facebook },
     blockedDomains: saved.blockedDomains ?? [], allowedDomains: saved.allowedDomains ?? [],
     history: saved.history ?? [], stats: { scans: 0, warnings: 0, popups: 0, ...saved.stats },
   };

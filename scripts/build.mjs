@@ -51,7 +51,7 @@ const licenses = await Promise.all(deps.map(async (name) => {
 await writeFile("dist/THIRD_PARTY_LICENSES.txt", licenses.join("\n\n"));
 const configs = [
   { entryPoints: { background: "src/background.js", popup: "src/ui/popup.js", options: "src/ui/options.js", warning: "src/ui/warning.js" }, format: "esm", splitting: true },
-  { entryPoints: { content: "src/content.js" }, format: "iife" },
+  { entryPoints: { content: "src/content.js", facebook: "src/facebook.js" }, format: "iife" },
 ].map((config) => ({ ...config, outdir: "dist", bundle: true, target: "chrome120", sourcemap: true, logLevel: "info" }));
 if (process.argv.includes("--watch")) {
   for (const config of configs) await (await context(config)).watch();

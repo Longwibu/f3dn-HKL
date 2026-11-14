@@ -1,4 +1,4 @@
-// Isolated world: không ghi đè window.open của trang, không thu thập nội dung trang.
+// Cảnh báo URL; bộ lọc Facebook có entry riêng chạy từ document_start.
 (async () => {
   try {
     const response = await chrome.runtime.sendMessage({ type: "GET_PAGE_STATE" });

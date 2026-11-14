@@ -3,7 +3,8 @@ import { checkDnssec } from "./core/dnssec.js";
 import { buildProtectionRules, buildTemporaryRule, temporaryRuleId } from "./core/rules.js";
 import { AD_DOMAINS, TRACKER_DOMAINS, DEFAULT_SETTINGS } from "./data/catalog.js";
 import { readLocal, mutateLocal, recordEvent } from "./services/storage.js";
-import { analyzeContent } from "./services/ai-provider.js";
+import { analyzeContent, clearContentCache, compilePreferences } from "./services/ai-provider.js";
+import { isFacebookFeedUrl, publicFacebookConfig, validateRules, unavailableResult } from "./core/facebook-policy.js";
 
 const navigationVersions = new Map();
 const guard = (promise) => promise.catch((error) => console.warn("PhishGuard:", error.message));
@@ -25,6 +26,10 @@ async function syncRules(state) {
 const ready = (async () => {
   await chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
   const state = await readLocal();
+  if (state.facebook.compileStatus === "running") {
+    await mutateLocal((current) => ({ facebook: { ...current.facebook, compileStatus: "error", compileJob: null,
+      compileError: "Lần xử lý trước bị gián đoạn. Mở popup và gửi lại yêu cầu." } }));
+  }
   await syncRules(state);
 })();
 
@@ -104,6 +109,65 @@ function isExtensionPage(sender) {
     .some((path) => sender.url?.split(/[?#]/)[0] === chrome.runtime.getURL(path));
 }
 
+function isFacebookUrl(value) {
+  try { const url = new URL(value); return url.protocol === "https:" && ["facebook.com", "www.facebook.com", "web.facebook.com", "m.facebook.com"].includes(url.hostname) && !url.port; }
+  catch { return false; }
+}
+
+function isFacebookSender(sender) {
+  return sender.id === chrome.runtime.id && sender.frameId === 0 && Number.isInteger(sender.tab?.id)
+    && isFacebookUrl(sender.url);
+}
+
+async function notifyFacebookConfig() {
+  clearContentCache();
+  const config = publicFacebookConfig(await readLocal());
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(tabs.filter((tab) => isFacebookUrl(tab.url))
+    .map((tab) => chrome.tabs.sendMessage(tab.id, { type: "FACEBOOK_CONFIG_CHANGED", config })));
+}
+
+let compiling = false;
+async function compileAndSaveRules(message) {
+  if (compiling) throw new Error("Đang tách yêu cầu trước. Bạn chờ một chút nhé.");
+  if (typeof message.prompt !== "string" || !message.prompt.trim() || message.prompt.length > 6000) {
+    throw new Error("Nhập yêu cầu tối đa 6.000 ký tự.");
+  }
+  compiling = true;
+  const job = crypto.randomUUID();
+  try {
+    const initial = await readLocal();
+    if (!initial.facebook.apiKey || !initial.facebook.consent) throw new Error("Kết nối Gemini ngay trong popup trước khi thêm yêu cầu.");
+    if (message.ruleId && !initial.facebook.rules.some((rule) => rule.id === message.ruleId)) throw new Error("Mục này đã được xóa.");
+    await mutateLocal((state) => ({ facebook: { ...state.facebook, compileStatus: "running", compileError: "", compileJob: job } }));
+    const compiled = validateRules(await compilePreferences({ prompt: message.prompt.trim(), apiKey: initial.facebook.apiKey }));
+    if (!compiled.length) throw new Error("Chưa tìm được nội dung bạn muốn lọc. Hãy mô tả rõ hơn.");
+    await mutateLocal((state) => {
+      const current = state.facebook;
+      if (current.compileJob !== job || current.apiKey !== initial.facebook.apiKey || !current.consent
+        || current.revision !== initial.facebook.revision) throw new Error("Danh sách hoặc kết nối vừa thay đổi. Gửi lại yêu cầu để áp dụng.");
+      const rules = current.rules.filter((rule) => rule.id !== message.ruleId);
+      for (const rule of compiled) {
+        const existing = rules.findIndex((item) => item.label.normalize("NFKC").toLocaleLowerCase("vi") === rule.label.normalize("NFKC").toLocaleLowerCase("vi"));
+        if (existing >= 0) rules[existing] = { ...rule, id: rules[existing].id };
+        else rules.push(rule);
+      }
+      return { facebook: { ...current, rules: validateRules(rules), enabled: true, revision: current.revision + 1,
+        compileStatus: "idle", compileError: "", compileJob: null } };
+    });
+    const savedDraft = (await chrome.storage.session.get("facebookPromptDraft")).facebookPromptDraft;
+    if (savedDraft?.prompt?.trim() === message.prompt.trim() && (savedDraft.ruleId || null) === (message.ruleId || null)) {
+      await chrome.storage.session.remove("facebookPromptDraft");
+    }
+    await notifyFacebookConfig();
+    return { saved: true };
+  } catch (error) {
+    await mutateLocal((state) => state.facebook.compileJob === job ? { facebook: { ...state.facebook,
+      compileStatus: "error", compileError: error.message, compileJob: null } } : {});
+    throw error;
+  } finally { compiling = false; }
+}
+
 let configurationQueue = Promise.resolve();
 function configure(patch) {
   const next = configurationQueue.then(async () => {
@@ -148,6 +212,20 @@ async function getWarning(message, sender) {
 async function handleMessage(message, sender) {
   await ready;
   if (!message || typeof message.type !== "string") throw new Error("Yêu cầu không hợp lệ.");
+  if (["GET_FACEBOOK_CONFIG", "ANALYZE_FACEBOOK_POST"].includes(message.type)) {
+    if (!isFacebookSender(sender)) throw new Error("Bộ lọc chỉ dùng trên Facebook.");
+    const state = await readLocal();
+    const config = publicFacebookConfig(state);
+    if (message.type === "GET_FACEBOOK_CONFIG") return config;
+    if (!isFacebookFeedUrl(sender.url)) return unavailableResult("Trang này không hỗ trợ lọc bài viết.", "disabled");
+    if (!config.enabled) return unavailableResult("Bộ lọc đang tắt.", "disabled");
+    const result = await analyzeContent({ text: message.text }, state.facebook);
+    const current = await readLocal();
+    if (!publicFacebookConfig(current).enabled || current.facebook.revision !== state.facebook.revision) {
+      return unavailableResult("Cài đặt đã thay đổi.", "disabled");
+    }
+    return result;
+  }
   // Content script chỉ đọc kết quả của chính tab và trang đang hiển thị.
   if (message.type === "GET_PAGE_STATE") {
     if (sender.id !== chrome.runtime.id || !sender.tab?.id || sender.frameId !== 0) return null;
@@ -186,7 +264,44 @@ async function handleMessage(message, sender) {
       if (!settings || Object.keys(DEFAULT_SETTINGS).some((key) => typeof settings[key] !== "boolean")
         || Object.keys(settings).some((key) => !(key in DEFAULT_SETTINGS))) throw new Error("Cài đặt không hợp lệ.");
       await configure({ settings });
+      await notifyFacebookConfig();
       return { saved: true };
+    }
+    case "SAVE_FACEBOOK_CONNECTION": {
+      if (typeof message.apiKey !== "string" || message.apiKey.length > 256 || typeof message.consent !== "boolean"
+        || /[\r\n]/.test(message.apiKey)) throw new Error("API key hoặc lựa chọn gửi dữ liệu không hợp lệ.");
+      await mutateLocal((state) => ({ facebook: { ...state.facebook, apiKey: message.apiKey.trim(), consent: message.consent,
+        revision: state.facebook.revision + 1, enabled: state.facebook.enabled && Boolean(message.apiKey.trim()) && message.consent } }));
+      await notifyFacebookConfig();
+      return { saved: true };
+    }
+    case "SET_FACEBOOK_ENABLED": {
+      if (typeof message.enabled !== "boolean") throw new Error("Cài đặt không hợp lệ.");
+      await mutateLocal((state) => {
+        if (message.enabled && (!state.facebook.apiKey || !state.facebook.consent || !state.facebook.rules.length)) {
+          throw new Error("Kết nối Gemini và thêm ít nhất một yêu cầu trước khi bật lọc.");
+        }
+        return { facebook: { ...state.facebook, enabled: message.enabled, revision: state.facebook.revision + 1 } };
+      });
+      await notifyFacebookConfig();
+      return { saved: true };
+    }
+    case "COMPILE_FACEBOOK_RULES": return compileAndSaveRules(message);
+    case "DELETE_FACEBOOK_RULE": {
+      if (typeof message.ruleId !== "string") throw new Error("Mục lọc không hợp lệ.");
+      await mutateLocal((state) => {
+        const rules = state.facebook.rules.filter((rule) => rule.id !== message.ruleId);
+        return { facebook: { ...state.facebook, rules, enabled: state.facebook.enabled && rules.length > 0,
+          revision: state.facebook.revision + 1 } };
+      });
+      await notifyFacebookConfig();
+      return { saved: true };
+    }
+    case "GET_FACEBOOK_TAB_STATUS": {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!isFacebookUrl(tab?.url)) return null;
+      try { return await chrome.tabs.sendMessage(tab.id, { type: "GET_FACEBOOK_SCAN_STATUS" }); }
+      catch { return { supported: isFacebookFeedUrl(tab.url), connected: false, lastError: "Tải lại tab Facebook để kích hoạt bộ lọc." }; }
     }
     case "SAVE_LISTS": {
       const blockedDomains = validateList(message.blockedDomains), allowedDomains = validateList(message.allowedDomains);
@@ -209,7 +324,11 @@ async function handleMessage(message, sender) {
     case "CLEAR_HISTORY":
       await mutateLocal(() => ({ history: [], stats: { scans: 0, warnings: 0, popups: 0 } }));
       return { cleared: true };
-    case "AI_STATUS": return analyzeContent();
+    case "AI_STATUS": {
+      const state = await readLocal(), config = publicFacebookConfig(state);
+      return { reasons: [!config.enabled ? "Bộ lọc Facebook đang tắt. Nhập yêu cầu và kết nối Gemini ngay trong popup."
+        : `Đang lọc theo ${state.facebook.rules.length} yêu cầu của bạn.`] };
+    }
     default: throw new Error("Loại yêu cầu không được hỗ trợ.");
   }
 }

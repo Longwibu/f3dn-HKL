@@ -35,7 +35,8 @@ Khi sửa code, chạy `npm run dev` để tự build lại `src/`, sau đó **R
 | Quảng cáo / tracker | Sáu nhóm hostname mẫu, chặn một số tài nguyên bên thứ ba bằng DNR |
 | Tab quảng cáo | Đóng tab/cửa sổ mới có đích trong danh sách quảng cáo/tracker |
 | DNSSEC | Tùy chọn, mặc định tắt; chỉ gọi Google DNS khi kiểm tra URL thủ công |
-| AI tin giả / Facebook Page | Adapter và trạng thái **chưa cấu hình**, chưa có mô hình hoặc kết luận AI |
+| Lọc bài Facebook (prototype) | Nhập yêu cầu ngay trong popup; Hydrogen tách/lưu danh sách, Decision làm mờ bài khớp trên Facebook; có nút Xem bài |
+| Kiểm chứng tin giả / Facebook Page | Chưa triển khai đối chiếu nguồn hoặc xác minh danh tính |
 | Lịch sử / thống kê | Cục bộ, tối đa 50 sự kiện, có nút xóa |
 
 ## Cấu trúc code
@@ -49,7 +50,10 @@ public/
   styles.css             CSS dùng chung, không tải font/CDN ngoài
 src/
   background.js          Điều phối sự kiện, message, luật chặn và ngoại lệ
-  content.js             Thông báo nhỏ trên website, không đọc nội dung trang
+  content.js             Cảnh báo URL
+  facebook.js            Khởi động bộ lọc từ document_start trên Facebook
+  content/facebook-filter.js  Quét trước bài sắp xuất hiện, làm mờ chờ kết quả, cho xem lại
+  content/facebook-extractor.js  Tìm khung bài và đọc text trực tiếp từ node HTML
   core/
     url-analyzer.js       URL → điểm và lý do, không phụ thuộc Chrome API
     dnssec.js             Truy vấn và diễn giải DNSSEC
@@ -57,7 +61,7 @@ src/
   data/catalog.js         Tên miền tham chiếu, miền demo, quảng cáo/tracker
   services/
     storage.js            Hàng đợi ghi cục bộ, giới hạn lịch sử
-    ai-provider.js        Hợp đồng cho backend AI tương lai
+    ai-provider.js        Hydrogen biên dịch yêu cầu; Decision đánh giá bài theo danh sách
   ui/
     common.js             Message wrapper và dựng DOM bằng textContent
     popup.js              Kiểm tra link, bật/tắt bảo vệ
@@ -128,7 +132,7 @@ webNavigation → đọc cấu hình → analyzeUrl()
 
 Listener đăng ký ở top-level để phù hợp vòng đời service worker MV3. `storage.local` giữ cấu hình/lịch sử; `storage.session` giữ URL tab, cảnh báo và ngoại lệ tạm qua các lần worker ngủ. `navigationVersions` và kiểm tra lại URL tab giúp bỏ kết quả của navigation cũ. Các sự kiện gần nhau chỉ gộp thống kê, vẫn phải thực hiện cảnh báo.
 
-`content.js` xin kết quả của chính tab bằng `GET_PAGE_STATE`, rồi vẽ thông báo qua Shadow DOM. Không thu thập bài viết, không ghi đè `window.open`. UI dùng `textContent` để không biến URL do người dùng nhập thành HTML.
+`content.js` xin kết quả của chính tab bằng `GET_PAGE_STATE`, rồi vẽ thông báo qua Shadow DOM. `facebook.js` chạy từ `document_start`, theo dõi node bài được Facebook thêm vào DOM. Bộ đọc lấy text trực tiếp từ từng khung bài, bỏ vùng điều khiển, comment và ô nhập. Không ghi đè `window.open`. UI dùng `textContent` để không biến dữ liệu thành HTML.
 
 ### 4. Chặn truy cập và ngoại lệ
 
@@ -154,17 +158,31 @@ DNSSEC không kiểm chứng nội dung website. Timeout 4 giây; không chặn 
 
 Lịch sử chỉ giữ hostname, thời gian, điểm, mức và mã lý do; **không lưu path/query/fragment/nội dung trang**. URL đầy đủ phục vụ trạng thái tab và cảnh báo chỉ giữ trong bộ nhớ phiên, không đồng bộ cloud. Có nút xóa lịch sử và thống kê.
 
-### 6. Mở rộng AI và dữ liệu nguy hiểm
+### 6. Lọc Facebook bằng yêu cầu tự nhiên
 
-`src/services/ai-provider.js` trả `status: "not-configured"`, `verdict: "unknown"`. Giao diện hiển thị đúng trạng thái, không tạo kết luận giả.
+Chạy `npm run build`, reload extension từ `dist/` và tải lại tab Facebook. Bấm **biểu tượng PhishGuard** trên thanh công cụ; toàn bộ thao tác nằm trong popup, không cần mở Cài đặt.
 
-Để triển khai AI:
+1. Mở **Kết nối Gemini**, nhập API key cá nhân và đồng ý gửi yêu cầu/text bài tới Google. Key cần truy cập cả `gemini-4-hydrogen` và `gemini-decision-1`.
+2. Nhập ví dụ: “Tôi không thích thấy cờ bạc mạng, khiêu dâm và quảng cáo vay nóng. Với cờ bạc, vẫn cho xem bài cảnh báo tác hại.” Bấm **Thêm vào bộ lọc**.
+3. Hydrogen tách đoạn thành các mục riêng, mỗi mục có tên, tiêu chí nhận diện và ngoại lệ. Extension lưu danh sách trên máy; Hydrogen không tự giữ bộ nhớ giữa các lần gọi.
+4. **Sửa** một mục để mô tả lại yêu cầu; **Xóa** để bỏ khỏi bộ lọc. Thay đổi áp dụng ngay trên tab Facebook đang mở. Bản nháp và trạng thái xử lý được giữ khi đóng/mở popup.
+5. Decision chỉ nhận tiêu chí đã lưu và text của node HTML chứa bài. Extension quét trước khoảng **3 màn hình** (vùng phía dưới 2.400–6.000 px) đối với các bài Facebook đã tải vào DOM. Node mới được **làm mờ ngay trong khi chờ**, giữ nguyên vị trí. Kết quả không khớp thì bỏ mờ; khớp thì hỏi có muốn **Xem bài** / **Làm mờ lại**. Tắt lọc hoặc xóa mục sẽ bỏ kết quả cũ và quét lại.
 
-1. Tạo backend riêng và giữ API key tại backend, không nhúng key trong extension.
-2. Thêm thao tác chủ động và giải thích dữ liệu sẽ gửi trước khi lấy bài viết/thông tin Page.
-3. Cài adapter `analyzeContent({ kind, url, title, text })` gọi backend HTTPS, có schema validation, timeout, giới hạn độ dài.
-4. Trả bằng chứng, nguồn, phiên bản mô hình và trạng thái không đủ dữ liệu; đánh giá độ tin cậy bằng dữ liệu thử nghiệm.
-5. Tách kết quả AI nội dung khỏi điểm URL. Facebook Page cần nguồn xác minh danh tính; URL không chứng minh Page chính chủ.
+Khung thông báo tự theo nền sáng/tối thực tế của Facebook và cập nhật ngay khi đổi giao diện. Chỉ dùng giao diện hệ điều hành làm dự phòng khi trang không có nền xác định; đổi màu không gửi lại bài cho AI.
+
+Không có chế độ demo, backend hay dependency mới. Key được lưu trong `chrome.storage.local`, không mã hóa/không đồng bộ cloud; content script không đọc được key. Xóa ô key trong popup rồi lưu để gỡ. Đây là prototype dùng key cá nhân, không nhúng key dịch vụ vào mã nguồn.
+
+Giới hạn bản này:
+
+- Lấy tối đa 6.000 ký tự text trực tiếp trong node bài. Nhận diện khung qua FeedUnit, article, vị trí trong feed và cấu trúc permalink/nút tương tác; không bắt buộc có story-message. Hỗ trợ hostname facebook.com, www/web/m.facebook.com. Bỏ qua chat, ô nhập, comment và các vùng điều khiển. Có thể bỏ sót nếu Facebook thay đổi cấu trúc DOM.
+- Chưa phân tích ảnh/video, chưa kiểm chứng tin giả. Nội dung khiêu dâm chỉ có ảnh hoặc video sẽ chưa được nhận diện nếu text không thể hiện chủ đề.
+- Ngưỡng làm mờ thử nghiệm là 0,80 từ giá trị `noul`, không dùng `confidence` làm xác suất nội dung khớp. Chưa hiệu chỉnh ngưỡng trên dữ liệu thực tế.
+- Lỗi API/hết hạn mức/thiếu chữ: giữ mờ, báo rõ chưa phân tích và cho người dùng tự chọn xem. Chờ quá 16 giây thì đổi trạng thái từ đang chờ sang chưa kiểm tra được; không tự kết luận bài độc hại. Nội dung ảnh/video không có chữ cũng cần người dùng tự chọn xem.
+- Preload ở đây là phân tích trước các node Facebook đã nạp bên dưới màn hình. Extension không tự cuộn, gọi API nội bộ của Facebook hay lấy những bài Facebook chưa tải. Khởi động sớm và MutationObserver giảm hiện tượng lộ bài trước khi lọc, nhưng chưa bảo đảm mọi frame trên mọi biến thể giao diện Facebook.
+- Cache có giới hạn, gắn với phiên bản danh sách và xóa khi cấu hình thay đổi. Không lưu text bài vào lịch sử; yêu cầu được biên dịch thành danh sách lưu cục bộ.
+- Chưa xác nhận bằng API key thật hoặc Facebook đã đăng nhập trong phiên làm việc này; cần thử trên tài khoản của bạn sau khi reload.
+
+Tài liệu chính thức: [Gemini Hydrogen](https://aistudio.google.com/docs/models/gemini-4-hydrogen), [structured output](https://ai.google.dev/gemini-api/docs/structured-output), [Decisions API](https://ai.google.dev/gemini-api/docs/decisions-api).
 
 Threat feed thực tế nên có service riêng chuẩn hóa domain/URL và đồng bộ snapshot vào DNR. Kiểm tra điều khoản, độ mới và false positive trước khi tự chặn. Không chạy mã JavaScript tải từ feed.
 
@@ -196,7 +214,7 @@ Nhập `https://phishguard-blocked.test` vào **thanh địa chỉ** để thử
 
 ## Giới hạn trước khi phát hành
 
-- Chưa có threat feed thật, AI, xác minh Facebook Page, cập nhật từ xa hoặc telemetry.
+- Chưa có threat feed thật, kiểm chứng tin giả, xác minh Facebook Page, cập nhật từ xa hoặc telemetry. Bộ lọc Gemini là prototype dùng key cá nhân.
 - Tập miền tham chiếu/confusable nhỏ, có thể bỏ sót hoặc cảnh báo nhầm; cần đánh giá thực tế.
 - Bộ chặn quảng cáo/tracker là mẫu nhỏ, chưa có cosmetic filtering hoặc bảo đảm chặn quảng cáo video; có thể ảnh hưởng website.
 - Đóng tab dựa trên hostname đích, không nhận diện mọi popup và có thể đóng tab quảng cáo người dùng chủ động mở.
