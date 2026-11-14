@@ -1,0 +1,54 @@
+PHISHGUARD — HƯỚNG DẪN CÀI VÀ THỬ NHANH
+Dành cho Chrome / Microsoft Edge trên máy tính
+
+Không cần Node.js, npm, Git, chạy lệnh hay server.
+
+CÀI EXTENSION
+1. Giải nén phishguard-chrome-edge.zip.
+2. Tìm thư mục PhishGuard có file manifest.json bên trong.
+3. Mở Chrome, nhập chrome://extensions vào thanh địa chỉ.
+   Nếu dùng Edge, nhập edge://extensions.
+4. Bật Developer mode / Chế độ dành cho nhà phát triển.
+5. Bấm Load unpacked / Tải tiện ích đã giải nén, chọn thư mục PhishGuard.
+6. Bấm biểu tượng tiện ích (mảnh ghép), ghim PhishGuard lên thanh công cụ.
+   Bấm icon PhishGuard để mở popup. Tải lại tab Facebook đã mở từ trước.
+
+Chọn thư mục có manifest.json, không chọn ZIP hoặc thư mục cha.
+Giữ nguyên thư mục PhishGuard sau khi cài; không xóa hoặc di chuyển.
+Bản này cài bằng Load unpacked, chưa có trên cửa hàng tiện ích.
+
+THỬ NGAY, KHÔNG CẦN API KEY
+Mở popup, nhập https://facebook.com.evil.test vào ô kiểm tra link,
+bấm Kiểm tra. Miền đăng ký thật là evil.test; thao tác này không mở website đích.
+
+THỬ LỌC FACEBOOK BẰNG AI
+Cần Internet, đăng nhập Facebook và API key Gemini còn hạn mức,
+có quyền truy cập gemini-4-hydrogen và gemini-decision-1.
+Bản ZIP không chứa API key. Dùng key cá nhân hoặc key được cung cấp riêng.
+
+1. Mở Kết nối Gemini trong popup, nhập key, tích đồng ý gửi yêu cầu
+   và chữ trong bài tới Google, bấm Lưu kết nối.
+2. Nhập: Tôi không muốn thấy cờ bạc mạng và quảng cáo vay nóng.
+   Vẫn cho tôi xem bài cảnh báo tác hại.
+   Bấm Thêm vào bộ lọc; có thể Sửa / Xóa từng mục sau đó.
+3. Chọn cách xử lý: thu gọn có lý do và nút xem, làm mờ,
+   hoặc ẩn hoàn toàn không thông báo.
+4. Mở bảng tin Facebook và tải lại trang. Xem Log hoạt động trong popup.
+   Extension quét trước tối đa 30 bài Facebook đã tải vào trang.
+
+Lượt gọi AI sử dụng hạn mức của key. Chưa kết nối Gemini thì AI chưa chạy;
+kiểm tra link vẫn dùng được. Hiện chỉ đọc chữ trong bài, chưa phân tích ảnh/video.
+Key lưu trên máy, không mã hóa; không chia sẻ key công khai.
+
+KHI GẶP LỖI
+- Thiếu manifest.json: chọn đúng thư mục PhishGuard sau khi giải nén.
+- Không thấy icon: mở menu tiện ích và ghim PhishGuard.
+- Facebook chưa thay đổi: bật bảo vệ và bộ lọc, thêm mục lọc, tải lại Facebook.
+- AI lỗi: xem log, kiểm tra quyền truy cập mô hình và hạn mức của key.
+- Không bật được Developer mode: dùng hồ sơ/máy được phép cài tiện ích.
+
+Bản mới và hướng dẫn: https://github.com/Longwibu/f3dn-HKL
+Tải bản cài sẵn: https://github.com/Longwibu/f3dn-HKL/releases/latest/download/phishguard-chrome-edge.zip
+Hướng dẫn cài chính thức:
+https://developer.chrome.com/docs/extensions/get-started/tutorial/hello-world#load-unpacked
+https://learn.microsoft.com/en-us/microsoft-edge/extensions/getting-started/extension-sideloading
