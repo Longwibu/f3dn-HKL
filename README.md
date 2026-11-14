@@ -21,6 +21,10 @@ npm run build
 
 Khi sửa code, chạy `npm run dev` để tự build lại `src/`, sau đó **Reload extension** trong trang quản lý và tải lại tab thử nghiệm. Nếu sửa `public/`, dừng rồi chạy lại lệnh vì tài nguyên tĩnh chỉ được sao chép lúc khởi động. Không cần API key.
 
+Bấm icon mở popup ngay dưới thanh công cụ trên mọi hệ điều hành, kể cả Ubuntu/Linux. Bản nháp được giữ khi đóng và mở lại popup; không gửi yêu cầu hoặc lưu chữ trung gian khi bộ gõ đang ghép dấu. Kiểm tra tự động mô phỏng luồng composition và khôi phục bản nháp; chưa xác nhận bộ gõ IBus/Fcitx thực tế trên máy Ubuntu.
+
+Khung **Log hoạt động** trong giao diện cập nhật khi tách yêu cầu, quét bài, đổi cấu hình hoặc gặp lỗi. Log chỉ giữ tối đa 60 dòng trong phiên trình duyệt, có nút xóa; không chứa API key, nội dung bài viết hoặc yêu cầu riêng tư.
+
 ## Chức năng và phạm vi
 
 | Chức năng | Đã triển khai |
@@ -54,6 +58,7 @@ src/
   facebook.js            Khởi động bộ lọc từ document_start trên Facebook
   content/facebook-filter.js  Quét trước bài sắp xuất hiện, làm mờ chờ kết quả, cho xem lại
   content/facebook-extractor.js  Tìm khung bài và đọc text trực tiếp từ node HTML
+  content/facebook-window.js     Chọn bài đang đọc và 29 bài tiếp theo theo thứ tự DOM
   core/
     url-analyzer.js       URL → điểm và lý do, không phụ thuộc Chrome API
     dnssec.js             Truy vấn và diễn giải DNSSEC
@@ -61,6 +66,7 @@ src/
   data/catalog.js         Tên miền tham chiếu, miền demo, quảng cáo/tracker
   services/
     storage.js            Hàng đợi ghi cục bộ, giới hạn lịch sử
+    activity-log.js       Log phiên, gộp lượt quét và loại dữ liệu riêng tư
     ai-provider.js        Hydrogen biên dịch yêu cầu; Decision đánh giá bài theo danh sách
   ui/
     common.js             Message wrapper và dựng DOM bằng textContent
@@ -166,7 +172,8 @@ Chạy `npm run build`, reload extension từ `dist/` và tải lại tab Facebo
 2. Nhập ví dụ: “Tôi không thích thấy cờ bạc mạng, khiêu dâm và quảng cáo vay nóng. Với cờ bạc, vẫn cho xem bài cảnh báo tác hại.” Bấm **Thêm vào bộ lọc**.
 3. Hydrogen tách đoạn thành các mục riêng, mỗi mục có tên, tiêu chí nhận diện và ngoại lệ. Extension lưu danh sách trên máy; Hydrogen không tự giữ bộ nhớ giữa các lần gọi.
 4. **Sửa** một mục để mô tả lại yêu cầu; **Xóa** để bỏ khỏi bộ lọc. Thay đổi áp dụng ngay trên tab Facebook đang mở. Bản nháp và trạng thái xử lý được giữ khi đóng/mở popup.
-5. Decision chỉ nhận tiêu chí đã lưu và text của node HTML chứa bài. Extension quét trước khoảng **3 màn hình** (vùng phía dưới 2.400–6.000 px) đối với các bài Facebook đã tải vào DOM. Node mới được **làm mờ ngay trong khi chờ**, giữ nguyên vị trí. Kết quả không khớp thì bỏ mờ; khớp thì hỏi có muốn **Xem bài** / **Làm mờ lại**. Tắt lọc hoặc xóa mục sẽ bỏ kết quả cũ và quét lại.
+5. Chọn **Khi gặp nội dung muốn lọc** ngay trong popup: **Thu gọn, giữ lý do và nút xem** (bài biến mất, còn khung giải thích và nút Xem bài); **Làm mờ bài viết** (mặc định); hoặc **Ẩn hoàn toàn, không thông báo** (không bài, không khung, không nút xem). Lựa chọn lưu trên máy, áp dụng ngay cho bài đã lọc mà không gọi lại AI.
+6. Decision chỉ nhận tiêu chí đã lưu và text của node HTML chứa bài. Extension chọn **30 bài tính từ bài đang đọc** (bài hiện tại + 29 bài sau, theo thứ tự DOM), tự dịch cửa sổ khi cuộn. Vùng đọc được ước lượng từ vị trí bài trong viewport. Xử lý tối đa 4 bài đồng thời, ưu tiên bài gần vị trí đọc, không gửi lại bài đã có kết quả hợp lệ. Node trong cửa sổ được **làm mờ ngay trong khi chờ**. Kết quả không khớp thì bỏ mờ; khớp thì áp dụng cách xử lý đã chọn. Tắt lọc khôi phục bài; đổi cách xử lý cho phép xem lại bài đang ẩn hoàn toàn.
 
 Khung thông báo tự theo nền sáng/tối thực tế của Facebook và cập nhật ngay khi đổi giao diện. Chỉ dùng giao diện hệ điều hành làm dự phòng khi trang không có nền xác định; đổi màu không gửi lại bài cho AI.
 
@@ -177,9 +184,9 @@ Giới hạn bản này:
 - Lấy tối đa 6.000 ký tự text trực tiếp trong node bài. Nhận diện khung qua FeedUnit, article, vị trí trong feed và cấu trúc permalink/nút tương tác; không bắt buộc có story-message. Hỗ trợ hostname facebook.com, www/web/m.facebook.com. Bỏ qua chat, ô nhập, comment và các vùng điều khiển. Có thể bỏ sót nếu Facebook thay đổi cấu trúc DOM.
 - Chưa phân tích ảnh/video, chưa kiểm chứng tin giả. Nội dung khiêu dâm chỉ có ảnh hoặc video sẽ chưa được nhận diện nếu text không thể hiện chủ đề.
 - Ngưỡng làm mờ thử nghiệm là 0,80 từ giá trị `noul`, không dùng `confidence` làm xác suất nội dung khớp. Chưa hiệu chỉnh ngưỡng trên dữ liệu thực tế.
-- Lỗi API/hết hạn mức/thiếu chữ: giữ mờ, báo rõ chưa phân tích và cho người dùng tự chọn xem. Chờ quá 16 giây thì đổi trạng thái từ đang chờ sang chưa kiểm tra được; không tự kết luận bài độc hại. Nội dung ảnh/video không có chữ cũng cần người dùng tự chọn xem.
-- Preload ở đây là phân tích trước các node Facebook đã nạp bên dưới màn hình. Extension không tự cuộn, gọi API nội bộ của Facebook hay lấy những bài Facebook chưa tải. Khởi động sớm và MutationObserver giảm hiện tượng lộ bài trước khi lọc, nhưng chưa bảo đảm mọi frame trên mọi biến thể giao diện Facebook.
-- Cache có giới hạn, gắn với phiên bản danh sách và xóa khi cấu hình thay đổi. Không lưu text bài vào lịch sử; yêu cầu được biên dịch thành danh sách lưu cục bộ.
+- Lỗi API/hết hạn mức/thiếu chữ: giữ mờ, báo rõ chưa phân tích và cho người dùng tự chọn xem. Thời hạn 16 giây chỉ bắt đầu khi bài được gửi đi hoặc đang chờ Facebook nạp chữ; bài có text đang xếp hàng không tự hết hạn. Không tự kết luận bài độc hại. Nội dung ảnh/video không có chữ cũng cần người dùng tự chọn xem.
+- Preload phân tích trước tối đa 30 node Facebook đã nạp từ vị trí đọc. Nếu chỉ có 12 bài thì popup báo **12/30**, và tự bổ sung khi Facebook thêm bài. Extension không tự cuộn, gọi API nội bộ của Facebook hay lấy những bài Facebook chưa tải. Khởi động sớm và MutationObserver giảm hiện tượng lộ bài trước khi lọc, nhưng chưa bảo đảm mọi frame trên mọi biến thể giao diện Facebook.
+- Cache có giới hạn, gắn với phiên bản danh sách và xóa khi quy tắc/kết nối thay đổi. Đổi cách xử lý chỉ cập nhật giao diện, giữ nguyên kết quả phân loại. Không lưu text bài vào lịch sử; yêu cầu được biên dịch thành danh sách lưu cục bộ.
 - Chưa xác nhận bằng API key thật hoặc Facebook đã đăng nhập trong phiên làm việc này; cần thử trên tài khoản của bạn sau khi reload.
 
 Tài liệu chính thức: [Gemini Hydrogen](https://aistudio.google.com/docs/models/gemini-4-hydrogen), [structured output](https://ai.google.dev/gemini-api/docs/structured-output), [Decisions API](https://ai.google.dev/gemini-api/docs/decisions-api).

@@ -13,8 +13,19 @@
       <input type="checkbox" class="switch" id="enabled" aria-label="Bật bảo vệ PhishGuard" disabled>
     </section>
     <section class="facebook-panel" aria-labelledby="facebook-heading">
-      <div class="section-heading"><div><p class="eyebrow">Facebook</p><h1 id="facebook-heading">Bảng tin theo ý bạn.</h1></div><input id="facebook-enabled" type="checkbox" class="switch" aria-label="Bật làm mờ bài Facebook" disabled></div>
-      <p class="filter-intro">Nói những gì bạn không muốn thấy. Bài phù hợp sẽ được làm mờ, bạn luôn có thể chọn xem.</p>
+      <div class="section-heading"><div><p class="eyebrow">Facebook</p><h1 id="facebook-heading">Bảng tin theo ý bạn.</h1></div><input id="facebook-enabled" type="checkbox" class="switch" aria-label="Bật bộ lọc Facebook" disabled></div>
+      <p class="filter-intro">Nói những gì bạn không muốn thấy và chọn cách xử lý bài khớp với danh sách của bạn.</p>
+      <div class="handling-control">
+        <label class="field-label" for="facebook-handling-mode">Khi gặp nội dung muốn lọc</label>
+        <select id="facebook-handling-mode" aria-describedby="handling-hint handling-pending" disabled>
+          <option value="collapse">Thu gọn, giữ lý do và nút xem</option>
+          <option value="blur" selected>Làm mờ bài viết</option>
+          <option value="hide">Ẩn hoàn toàn, không thông báo</option>
+        </select>
+        <p id="handling-hint" class="hint">Làm mờ bài viết, giữ lý do và nút Xem bài.</p>
+        <p id="handling-pending" class="hint">Bài đang chờ phân tích vẫn được làm mờ tạm.</p>
+        <p id="handling-status" class="status" role="status" aria-live="polite"></p>
+      </div>
       <details id="facebook-connection" class="connection-panel">
         <summary id="connection-summary">Kết nối Gemini</summary>
         <form id="connection-form">
@@ -28,15 +39,21 @@
       </details>
       <form id="preferences-form">
         <label class="field-label" for="preferences-prompt" id="prompt-label">Bạn không muốn thấy gì?</label>
-        <textarea id="preferences-prompt" rows="3" maxlength="6000" placeholder="Tôi không thích thấy cờ bạc mạng, khiêu dâm. Vẫn cho tôi xem các bài cảnh báo về cờ bạc…" aria-describedby="prompt-help"></textarea>
+        <textarea id="preferences-prompt" rows="3" maxlength="6000" lang="vi" inputmode="text" spellcheck="false" disabled placeholder="Tôi không thích thấy cờ bạc mạng, khiêu dâm. Vẫn cho tôi xem các bài cảnh báo về cờ bạc…" aria-describedby="prompt-help"></textarea>
         <p id="prompt-help" class="hint">Viết cả đoạn cũng được. Yêu cầu sẽ được tách thành từng mục và lưu trên máy.</p>
         <div class="prompt-actions"><button id="compile-preferences" class="button" type="submit" disabled>Thêm vào bộ lọc</button><button id="cancel-edit" class="button quiet" type="button" hidden>Hủy sửa</button></div>
       </form>
       <p id="preferences-status" class="status" role="status" aria-live="polite"></p>
-      <div class="section-heading rules-heading"><h2>Những nội dung muốn làm mờ</h2><span id="rules-count" class="tag">0 mục</span></div>
+      <div class="section-heading rules-heading"><h2>Những nội dung muốn lọc</h2><span id="rules-count" class="tag">0 mục</span></div>
       <p id="rules-empty" class="filter-empty">Chưa có mục nào. Thêm yêu cầu đầu tiên ở trên.</p>
-      <ul id="facebook-rules" class="preference-list" aria-label="Danh sách nội dung muốn làm mờ"></ul>
+      <ul id="facebook-rules" class="preference-list" aria-label="Danh sách nội dung muốn lọc"></ul>
       <div class="feed-status-line"><p id="ai-status" role="status">Đang đọc trạng thái…</p><button id="ai-info" type="button" title="Cập nhật trạng thái tab Facebook" aria-label="Cập nhật trạng thái Facebook">↻</button></div>
+      <section class="activity-panel" aria-labelledby="activity-heading">
+        <div class="activity-heading"><h2 id="activity-heading">Log hoạt động</h2><button id="clear-activity-log" type="button">Xóa log</button></div>
+        <p id="activity-empty">Chưa có hoạt động trong phiên này.</p>
+        <ol id="activity-log" aria-label="Hoạt động gần nhất"></ol>
+        <p id="activity-status" class="status" role="status"></p>
+      </section>
     </section>
     <div class="url-section-heading"><h2>Bảo vệ đường link</h2><span class="tag">Trên máy</span></div>
     <section class="stats" aria-label="Thống kê cục bộ">

@@ -1,7 +1,8 @@
 export const MAX_RULES = 20;
 export const BLUR_THRESHOLD = 0.8;
+export const FACEBOOK_HANDLING_MODES = Object.freeze(["collapse", "blur", "hide"]);
 export const DEFAULT_FACEBOOK_SETTINGS = Object.freeze({
-  enabled: false, consent: false, apiKey: "", rules: Object.freeze([]), revision: 0,
+  enabled: false, consent: false, apiKey: "", rules: Object.freeze([]), revision: 0, handlingMode: "blur",
 });
 
 export function isFacebookFeedUrl(value) {
@@ -37,8 +38,10 @@ export function validateFacebookSettings(value) {
     || typeof value.apiKey !== "string" || value.apiKey.length > 256) throw new Error("Cài đặt Facebook không hợp lệ.");
   const apiKey = value.apiKey.trim();
   const rules = validateRules(value.rules ?? []);
+  const handlingMode = value.handlingMode ?? "blur";
+  if (!FACEBOOK_HANDLING_MODES.includes(handlingMode)) throw new Error("Cách xử lý bài viết không hợp lệ.");
   if (value.enabled && (!value.consent || !apiKey)) throw new Error("Nhập API key và đồng ý gửi nội dung trước khi bật bộ lọc.");
-  return { enabled: value.enabled, consent: value.consent, apiKey, rules,
+  return { enabled: value.enabled, consent: value.consent, apiKey, rules, handlingMode,
     revision: Number.isSafeInteger(value.revision) && value.revision >= 0 ? value.revision : 0 };
 }
 
@@ -46,7 +49,8 @@ export function publicFacebookConfig(state) {
   const facebook = state.facebook;
   const rulesCount = Array.isArray(facebook.rules) ? facebook.rules.length : 0;
   return { enabled: Boolean(state.settings.enabled && facebook.enabled && facebook.consent && facebook.apiKey && rulesCount),
-    revision: facebook.revision ?? 0, rulesCount };
+    revision: facebook.revision ?? 0, rulesCount,
+    handlingMode: FACEBOOK_HANDLING_MODES.includes(facebook.handlingMode) ? facebook.handlingMode : "blur" };
 }
 
 export function evaluateScores(scores, rules) {

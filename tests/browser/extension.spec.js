@@ -213,3 +213,70 @@ test("popup tách yêu cầu, sửa/xóa danh sách và làm mờ bài Facebook"
   expect(await feed.locator("#gambling").getAttribute("inert")).toBeNull();
   await app.popup.screenshot({ path: "test-results/popup-preferences.png", fullPage: true });
 });
+
+test("log popup cập nhật, giữ qua lần mở lại và không lưu nội dung riêng tư", async ({ app }) => {
+  const key = "test-secret-key-never-log";
+  const prompt = "Yêu cầu riêng tư không được xuất hiện trong log";
+  await app.worker.evaluate(() => {
+    globalThis.fetch = async () => Response.json({ candidates: [{ finishReason: "STOP", content: {
+      parts: [{ text: JSON.stringify({ rules: [{ label: "Nhãn riêng tư", description: "Mô tả riêng tư", exclusions: "" }] }) }],
+    } }] });
+  });
+  await app.popup.locator("#facebook-key").fill(key);
+  await app.popup.locator("#facebook-consent").check();
+  await app.popup.locator("#save-connection").click();
+  await expect(app.popup.locator("#activity-log")).toContainText("Đã lưu kết nối Gemini");
+  await app.popup.locator("#preferences-prompt").fill(prompt);
+  await app.popup.locator("#compile-preferences").click();
+  await expect(app.popup.locator("#activity-log")).toContainText("Đã cập nhật 1 yêu cầu lọc");
+  const response = await app.popup.evaluate(() => chrome.runtime.sendMessage({ type: "GET_ACTIVITY_LOG" }));
+  expect(response.ok).toBe(true);
+  expect(JSON.stringify(response.data)).not.toMatch(/test-secret-key|Yêu cầu riêng tư|Nhãn riêng tư|Mô tả riêng tư/);
+  await app.popup.reload();
+  await expect(app.popup.locator("#activity-log")).toContainText("Đã cập nhật 1 yêu cầu lọc");
+  await app.popup.locator("#clear-activity-log").click();
+  await expect.poll(() => app.worker.evaluate(async () => (await chrome.storage.session.get("activityLog")).activityLog)).toEqual([]);
+  await expect(app.popup.locator("#activity-log")).not.toContainText("Đã cập nhật");
+});
+
+test("IME giữ bản nháp tiếng Việt trong popup thanh công cụ", async ({ app }) => {
+  // Synthetic composition verifies our handlers; native Ubuntu IBus needs a desktop check.
+  const windowCount = await app.worker.evaluate(async () => (await chrome.windows.getAll()).length);
+  await app.popup.evaluate(async () => {
+    const original = chrome.runtime.sendMessage.bind(chrome.runtime);
+    window.compileMessages = 0;
+    chrome.runtime.sendMessage = (...args) => {
+      if (args[0]?.type === "COMPILE_FACEBOOK_RULES") window.compileMessages++;
+      return original(...args);
+    };
+    await original({ type: "SAVE_FACEBOOK_CONNECTION", apiKey: "test-ime-key", consent: true });
+  });
+  const input = app.popup.locator("#preferences-prompt");
+  await input.fill("Bản nháp");
+  await expect.poll(() => app.worker.evaluate(async () => (await chrome.storage.session.get("facebookPromptDraft")).facebookPromptDraft?.prompt)).toBe("Bản nháp");
+  await input.focus();
+  await input.evaluate((element) => {
+    element.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    element.value = "Tôi không thích cơ";
+    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertCompositionText", isComposing: true, data: "ơ" }));
+    element.form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await app.worker.evaluate(async () => {
+    const { settings } = await chrome.storage.local.get("settings");
+    await chrome.storage.local.set({ settings: { ...settings, dnssec: !settings?.dnssec } });
+  });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("Tôi không thích cơ");
+  expect(await app.popup.evaluate(() => window.compileMessages)).toBe(0);
+  await input.evaluate((element) => {
+    element.value = "Tôi không thích cờ bạc mạng";
+    element.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "cờ" }));
+    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: "cờ" }));
+  });
+  await expect.poll(() => app.worker.evaluate(async () => (await chrome.storage.session.get("facebookPromptDraft")).facebookPromptDraft?.prompt)).toBe("Tôi không thích cờ bạc mạng");
+  await app.popup.reload();
+  await expect(input).toHaveValue("Tôi không thích cờ bạc mạng");
+  await expect(app.popup.locator("#open-popup-window")).toHaveCount(0);
+  expect(await app.worker.evaluate(() => chrome.action.getPopup({}))).toBe(`${app.root}/popup.html`);
+  expect(await app.worker.evaluate(async () => (await chrome.windows.getAll()).length)).toBe(windowCount);
+});

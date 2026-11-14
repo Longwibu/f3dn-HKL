@@ -3,8 +3,9 @@ import { checkDnssec } from "./core/dnssec.js";
 import { buildProtectionRules, buildTemporaryRule, temporaryRuleId } from "./core/rules.js";
 import { AD_DOMAINS, TRACKER_DOMAINS, DEFAULT_SETTINGS } from "./data/catalog.js";
 import { readLocal, mutateLocal, recordEvent } from "./services/storage.js";
+import { recordActivity, readActivity, clearActivity } from "./services/activity-log.js";
 import { analyzeContent, clearContentCache, compilePreferences } from "./services/ai-provider.js";
-import { isFacebookFeedUrl, publicFacebookConfig, validateRules, unavailableResult } from "./core/facebook-policy.js";
+import { isFacebookFeedUrl, publicFacebookConfig, validateRules, unavailableResult, FACEBOOK_HANDLING_MODES } from "./core/facebook-policy.js";
 
 const navigationVersions = new Map();
 const guard = (promise) => promise.catch((error) => console.warn("PhishGuard:", error.message));
@@ -24,6 +25,8 @@ async function syncRules(state) {
 
 // Đăng ký listener ở top-level. Trạng thái cần qua lần ngủ của worker nằm trong storage.
 const ready = (async () => {
+  // Reset the previous Linux override: every platform uses the toolbar dropdown.
+  await chrome.action.setPopup({ popup: "popup.html" });
   await chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
   const state = await readLocal();
   if (state.facebook.compileStatus === "running") {
@@ -119,8 +122,8 @@ function isFacebookSender(sender) {
     && isFacebookUrl(sender.url);
 }
 
-async function notifyFacebookConfig() {
-  clearContentCache();
+async function notifyFacebookConfig({ invalidateAnalysis = true } = {}) {
+  if (invalidateAnalysis) clearContentCache();
   const config = publicFacebookConfig(await readLocal());
   const tabs = await chrome.tabs.query({});
   await Promise.allSettled(tabs.filter((tab) => isFacebookUrl(tab.url))
@@ -140,6 +143,7 @@ async function compileAndSaveRules(message) {
     if (!initial.facebook.apiKey || !initial.facebook.consent) throw new Error("Kết nối Gemini ngay trong popup trước khi thêm yêu cầu.");
     if (message.ruleId && !initial.facebook.rules.some((rule) => rule.id === message.ruleId)) throw new Error("Mục này đã được xóa.");
     await mutateLocal((state) => ({ facebook: { ...state.facebook, compileStatus: "running", compileError: "", compileJob: job } }));
+    await recordActivity("compile-start");
     const compiled = validateRules(await compilePreferences({ prompt: message.prompt.trim(), apiKey: initial.facebook.apiKey }));
     if (!compiled.length) throw new Error("Chưa tìm được nội dung bạn muốn lọc. Hãy mô tả rõ hơn.");
     await mutateLocal((state) => {
@@ -160,8 +164,10 @@ async function compileAndSaveRules(message) {
       await chrome.storage.session.remove("facebookPromptDraft");
     }
     await notifyFacebookConfig();
+    await recordActivity("compile-complete", { count: compiled.length });
     return { saved: true };
   } catch (error) {
+    await recordActivity("compile-error");
     await mutateLocal((state) => state.facebook.compileJob === job ? { facebook: { ...state.facebook,
       compileStatus: "error", compileError: error.message, compileJob: null } } : {});
     throw error;
@@ -219,11 +225,19 @@ async function handleMessage(message, sender) {
     if (message.type === "GET_FACEBOOK_CONFIG") return config;
     if (!isFacebookFeedUrl(sender.url)) return unavailableResult("Trang này không hỗ trợ lọc bài viết.", "disabled");
     if (!config.enabled) return unavailableResult("Bộ lọc đang tắt.", "disabled");
-    const result = await analyzeContent({ text: message.text }, state.facebook);
+    await recordActivity("scan-start");
+    let result;
+    try {
+      result = await analyzeContent({ text: message.text }, state.facebook);
+    } catch (error) {
+      await recordActivity("scan-error");
+      throw error;
+    }
     const current = await readLocal();
     if (!publicFacebookConfig(current).enabled || current.facebook.revision !== state.facebook.revision) {
       return unavailableResult("Cài đặt đã thay đổi.", "disabled");
     }
+    if (result.status !== "disabled") await recordActivity(result.status === "ok" ? "scan-complete" : "scan-error");
     return result;
   }
   // Content script chỉ đọc kết quả của chính tab và trang đang hiển thị.
@@ -239,6 +253,8 @@ async function handleMessage(message, sender) {
   }
   if (!isExtensionPage(sender)) throw new Error("Yêu cầu này chỉ dành cho giao diện PhishGuard.");
   switch (message.type) {
+    case "GET_ACTIVITY_LOG": return readActivity();
+    case "CLEAR_ACTIVITY_LOG": return clearActivity();
     case "GET_DASHBOARD": {
       const state = await readLocal();
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -273,6 +289,7 @@ async function handleMessage(message, sender) {
       await mutateLocal((state) => ({ facebook: { ...state.facebook, apiKey: message.apiKey.trim(), consent: message.consent,
         revision: state.facebook.revision + 1, enabled: state.facebook.enabled && Boolean(message.apiKey.trim()) && message.consent } }));
       await notifyFacebookConfig();
+      await recordActivity(message.apiKey.trim() ? "connection-saved" : "connection-cleared");
       return { saved: true };
     }
     case "SET_FACEBOOK_ENABLED": {
@@ -284,6 +301,15 @@ async function handleMessage(message, sender) {
         return { facebook: { ...state.facebook, enabled: message.enabled, revision: state.facebook.revision + 1 } };
       });
       await notifyFacebookConfig();
+      await recordActivity(message.enabled ? "filter-enabled" : "filter-disabled");
+      return { saved: true };
+    }
+    case "SET_FACEBOOK_HANDLING_MODE": {
+      if (!FACEBOOK_HANDLING_MODES.includes(message.handlingMode)) throw new Error("Cách xử lý bài viết không hợp lệ.");
+      // Presentation only: keep the rule revision, cached verdicts and in-flight API calls.
+      await mutateLocal((state) => ({ facebook: { ...state.facebook, handlingMode: message.handlingMode } }));
+      await notifyFacebookConfig({ invalidateAnalysis: false });
+      await recordActivity("handling-changed", { mode: message.handlingMode });
       return { saved: true };
     }
     case "COMPILE_FACEBOOK_RULES": return compileAndSaveRules(message);
@@ -295,6 +321,7 @@ async function handleMessage(message, sender) {
           revision: state.facebook.revision + 1 } };
       });
       await notifyFacebookConfig();
+      await recordActivity("rule-deleted");
       return { saved: true };
     }
     case "GET_FACEBOOK_TAB_STATUS": {

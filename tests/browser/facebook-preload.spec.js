@@ -95,3 +95,97 @@ test("API lỗi vẫn giữ lớp mờ cho đến khi người dùng xem hoặc 
   await expect(feed.locator("[data-phishguard-notice]")).toHaveCount(0);
   expect(await feed.locator("#post").getAttribute("inert")).toBeNull();
 });
+
+test("đổi cách xử lý bài khớp ngay lập tức, lưu lựa chọn và không gọi lại AI", async ({ app }) => {
+  const feed = await app.openFeed(`<div data-pagelet="FeedUnit_handling" class="post" id="post"
+    style="display:flex!important;filter:brightness(.9);pointer-events:auto">
+    <span>Tham gia cá độ trực tuyến và nhận thưởng hôm nay.</span>
+  </div>`);
+  const post = feed.locator("#post");
+  const notices = feed.locator("[data-phishguard-notice]");
+  const mode = app.popup.locator("#facebook-handling-mode");
+  await expect.poll(() => app.worker.evaluate(() => globalThis.__facebookRequests.length)).toBe(1);
+  await app.settle("cá độ", 0.95);
+  await expect(notices).toHaveAttribute("data-action", "blur");
+  await expect(post).toHaveCSS("filter", "blur(10px)");
+  await expect(mode).toHaveValue("blur");
+
+  await mode.selectOption("collapse");
+  await expect(post).toHaveCSS("display", "none");
+  await expect(notices).toHaveCount(1);
+  await expect(notices.getByText(/Nội dung bạn muốn lọc/)).toBeVisible();
+  await expect(notices.getByText(/Cờ bạc mạng/)).toBeVisible();
+  await feed.getByRole("button", { name: "Xem bài", exact: true }).click();
+  await expect(post).toHaveCSS("display", "flex");
+  await expect(post).toHaveCSS("filter", "brightness(0.9)");
+  await feed.getByRole("button", { name: "Thu gọn lại", exact: true }).click();
+  await expect(post).toHaveCSS("display", "none");
+
+  await mode.selectOption("hide");
+  await expect(post).toHaveCSS("display", "none");
+  await expect(notices).toHaveCount(0);
+  await expect(feed.getByRole("button", { name: "Xem bài", exact: true })).toHaveCount(0);
+  await app.popup.reload();
+  await expect(mode).toHaveValue("hide");
+
+  await mode.selectOption("blur");
+  await expect(post).toHaveCSS("display", "flex");
+  await expect(post).toHaveCSS("filter", "blur(10px)");
+  await expect(notices).toHaveCount(1);
+  expect(await app.worker.evaluate(() => globalThis.__facebookRequests.length)).toBe(1);
+
+  const reply = await app.popup.evaluate(() => chrome.runtime.sendMessage({ type: "SET_FACEBOOK_ENABLED", enabled: false }));
+  expect(reply.ok).toBe(true);
+  await expect(notices).toHaveCount(0);
+  await expect(post).toHaveCSS("display", "flex");
+  await expect(post).toHaveCSS("filter", "brightness(0.9)");
+  await expect(post).toHaveCSS("pointer-events", "auto");
+  expect(await post.getAttribute("inert")).toBeNull();
+  expect(await post.evaluate((node) => node.style.getPropertyPriority("display"))).toBe("important");
+});
+
+test("preload đúng 30 bài từ vị trí đọc và trượt cửa sổ khi cuộn", async ({ app }) => {
+  await app.worker.evaluate(() => {
+    globalThis.__facebookRequests = [];
+    globalThis.fetch = async (_url, options) => {
+      const body = JSON.parse(options.body);
+      globalThis.__facebookRequests.push({ text: body.input });
+      return Response.json({ answers: Object.fromEntries(Object.keys(body.questions).map((id) => [id,
+        { type: "noul", noul: 0.05, confidence: 0.95 },
+      ])) });
+    };
+  });
+  const feed = await app.openFeed(`<style>html{overflow-anchor:none}.post{height:420px;box-sizing:border-box}</style>${
+    Array.from({ length: 45 }, (_, index) => `<div data-pagelet="FeedUnit_${index}" class="post" id="post-${index}">
+      <span>Bài số ${String(index).padStart(2, "0")} chia sẻ câu chuyện bình thường trong ngày.</span>
+    </div>`).join("")}`);
+  const requestCount = () => app.worker.evaluate(() => globalThis.__facebookRequests.length);
+  const status = async () => {
+    await feed.bringToFront();
+    const reply = await app.popup.evaluate(() => chrome.runtime.sendMessage({ type: "GET_FACEBOOK_TAB_STATUS" }));
+    expect(reply.ok).toBe(true);
+    return reply.data;
+  };
+
+  await expect.poll(requestCount).toBe(30);
+  await expect(feed.locator('[data-phishguard-notice]')).toHaveCount(0);
+  expect(await feed.evaluate(() => scrollY)).toBe(0);
+  const firstTexts = await app.worker.evaluate(() => globalThis.__facebookRequests.map((item) => item.text));
+  expect(firstTexts).toHaveLength(30);
+  expect(firstTexts.some((text) => text.includes("Bài số 29"))).toBe(true);
+  expect(firstTexts.some((text) => text.includes("Bài số 30"))).toBe(false);
+  await expect(feed.locator('#post-30')).toHaveCSS("filter", "none");
+  expect(await status()).toMatchObject({ preloadTarget: 30, preloadWindow: 30 });
+
+  await feed.locator('#post-10').evaluate((post) => window.scrollTo(0, post.getBoundingClientRect().top + scrollY - 100));
+  await expect.poll(requestCount).toBe(40);
+  await expect(feed.locator('[data-phishguard-notice]')).toHaveCount(0);
+  expect(await status()).toMatchObject({ preloadTarget: 30, preloadWindow: 30 });
+
+  await feed.locator('#post-40').evaluate((post) => window.scrollTo(0, post.getBoundingClientRect().top + scrollY - 100));
+  await expect.poll(requestCount).toBe(45);
+  await expect(feed.locator('[data-phishguard-notice]')).toHaveCount(0);
+  expect(await status()).toMatchObject({ preloadTarget: 30, preloadWindow: 5 });
+  const allTexts = await app.worker.evaluate(() => globalThis.__facebookRequests.map((item) => item.text));
+  expect(new Set(allTexts).size).toBe(45);
+});
